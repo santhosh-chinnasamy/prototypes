@@ -15,16 +15,30 @@ fn hello() {
     say(&message, width, &mut writer).unwrap();
 }
 
-fn read_file() {
+fn read_file(path: &str) -> String {
     let current_dir = current_dir().unwrap().display().to_string() + "/src";
-    let path = current_dir + "/hello.txt";
-    match read_to_string(path) {
-        Err(err) => panic!("Error reading file:{}", err),
-        Ok(contents) => println!("content: {}", contents),
-    }
+    let file_path = current_dir + path;
+    let data = match read_to_string(file_path) {
+        Err(err) => {
+            let message = format!("Err reading file @ {} and error: \n {}", path, err);
+            panic!("{}", message)
+        },
+        Ok(contents) => contents,
+    };
+
+    return data;
 }
+
+fn read_files() {
+
+    let hello = read_file("/hello.txt");
+    let world = read_file("/worlds.txt");
+    println!("{} ---- {}", hello, world);
+}
+
+
 
 fn main() {
     hello();
-    read_file();
+    read_files();
 }
