@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "GrayScale",
+  "description": "black and white filter",
+  "version": "1.0",
+  "author": "Santhosh Chinnasamy",
+  "permissions": ["activeTab"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "content_scripts": [
+    {
+      "js": ["content.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
