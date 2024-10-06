@@ -2,6 +2,8 @@
 
 A browser extension that helps you get colors used in a website.
 
+![Screen Shot](./screenshot.png)
+
 ## Attributions
 
 - RGBA to Hex Util by [Rob Garrision](https://wowmotty.blogspot.com/2017/05/convert-rgba-output-to-hex-color.html)
