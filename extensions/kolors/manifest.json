@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Kolors",
+  "description": "Get all colors used in a webpage",
+  "version": "1.0.0",
+  "author": "Santhosh Chinnasamy Photo by Alexander Grey from Pexels: https://www.pexels.com/photo/person-with-body-painting-1209843/ Photo by Pixabay from Pexels: https://www.pexels.com/photo/close-up-photography-of-different-type-of-colors-of-paper-40799/",
+  "permissions": ["activeTab"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "content_scripts": [
+    {
+      "js": ["content.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
