@@ -7,6 +7,114 @@ use std::time::Instant;
 use tract_ndarray::{Array2, Array4, Axis, Ix2};
 use tract_onnx::prelude::*;
 
+#[derive(Debug, Clone)]
+pub struct Bbox {
+    pub x1: f32,
+    pub y1: f32,
+    pub x2: f32,
+    pub y2: f32,
+    pub confidence: f32,
+}
+
+impl Bbox {
+    pub fn new(x1: f32, y1: f32, x2: f32, y2: f32, confidence: f32) -> Self {
+        Self {
+            x1,
+            y1,
+            x2,
+            y2,
+            confidence,
+        }
+    }
+}
+
+fn canonicalize_detection_output(
+    tval: &tract_onnx::prelude::TValue,
+    preferred_cols: Option<usize>,
+) -> Result<Array2<f32>, anyhow::Error> {
+    let arr_view = tval.to_array_view::<f32>()?;
+    let ndim = arr_view.ndim();
+
+    match ndim {
+        2 => {
+            let a = arr_view.to_owned(); // owned dynamic-dim array
+            let (r, c) = (a.shape()[0], a.shape()[1]);
+            if let Some(cols) = preferred_cols {
+                if r == cols {
+                    // (cols, rows) -> transpose
+                    let t = a.t().to_owned();
+                    return Ok(t.into_dimensionality::<Ix2>().unwrap());
+                } else {
+                    return Ok(a.into_dimensionality::<Ix2>().unwrap());
+                }
+            } else {
+                if r <= 8 && c > r {
+                    let t = a.t().to_owned();
+                    return Ok(t.into_dimensionality::<Ix2>().unwrap());
+                } else {
+                    return Ok(a.into_dimensionality::<Ix2>().unwrap());
+                }
+            }
+        }
+        3 => {
+            let shape = arr_view.shape().to_vec();
+            let (d0, d1, d2) = (shape[0], shape[1], shape[2]);
+
+            // common case: [1, N, M] -> take slice at axis 0
+            if d0 == 1 {
+                let two = arr_view.index_axis(Axis(0), 0).to_owned();
+                let (r, c) = (two.shape()[0], two.shape()[1]);
+                if let Some(cols) = preferred_cols {
+                    if r == cols {
+                        let t = two.t().to_owned();
+                        return Ok(t.into_dimensionality::<Ix2>().unwrap());
+                    } else if c == cols {
+                        return Ok(two.into_dimensionality::<Ix2>().unwrap());
+                    } else {
+                        if r <= 8 && c > r {
+                            let t = two.t().to_owned();
+                            return Ok(t.into_dimensionality::<Ix2>().unwrap());
+                        } else {
+                            return Ok(two.into_dimensionality::<Ix2>().unwrap());
+                        }
+                    }
+                } else {
+                    if r <= 8 && c > r {
+                        let t = two.t().to_owned();
+                        return Ok(t.into_dimensionality::<Ix2>().unwrap());
+                    } else {
+                        return Ok(two.into_dimensionality::<Ix2>().unwrap());
+                    }
+                }
+            }
+
+            // case: [N, 1, M] -> axis(1)
+            if d1 == 1 {
+                let two = arr_view.index_axis(Axis(1), 0).to_owned();
+                return Ok(two.into_dimensionality::<Ix2>().unwrap());
+            }
+
+            // case: [N, M, 1] -> axis(2)
+            if d2 == 1 {
+                let two = arr_view.index_axis(Axis(2), 0).to_owned();
+                return Ok(two.into_dimensionality::<Ix2>().unwrap());
+            }
+
+            Err(anyhow::anyhow!(
+                "Unhandled 3-D detection output shape: {:?}",
+                shape
+            ))
+        }
+        other => {
+            let shape_opt = tval.to_array_view::<f32>().ok().map(|a| a.shape().to_vec());
+            return Err(anyhow::anyhow!(
+                "Unhandled detection output ndim = {} shape = {:?}",
+                other,
+                shape_opt
+            ));
+        }
+    }
+}
 fn main() -> Result<(), Error> {
     let t = Instant::now();
     let model = tract_onnx::onnx()
@@ -63,6 +171,80 @@ fn main() -> Result<(), Error> {
     println!("Inference done in {:?}", t.elapsed());
 
     println!("Output tensor shape: {:?}", outputs[0].shape());
+
+    let results = canonicalize_detection_output(&outputs[0], Some(5))?;
+
+    let (rows, cols) = (results.shape()[0], results.shape()[1]);
+    println!("Detections shape: {}x{}", rows, cols);
+
+    if cols != 5 {
+        return Err(anyhow::anyhow!(
+            "Unexpected detection output columns: expected 5, got {}",
+            cols
+        ));
+    }
+
+    //  detect whether coordinates appear to be normalized (0..1) or absolute (pixel values)
+    let sample_h = results[[0, 0]].abs();
+    let sample_w = results[[0, 0]].abs();
+    let likely_normalized = sample_h <= 1.01 && sample_w <= 1.01;
+    println!(
+        "Detections likely normalized: {} (sample values: h={} w={})",
+        likely_normalized, sample_h, sample_w
+    );
+
+    let confidence_threshold = 0.5f32;
+    let mut detections: Vec<Bbox> = Vec::with_capacity(256);
+
+    for i in 0..rows {
+        let confidence = results[[i, 4]];
+        if confidence < confidence_threshold {
+            continue;
+        }
+
+        let mut x = results[[i, 0]];
+        let mut y = results[[i, 1]];
+        let mut w = results[[i, 2]];
+        let mut h = results[[i, 3]];
+
+        //  If normalized, convert to absolute coordinates
+        if likely_normalized {
+            x *= target as f32;
+            y *= target as f32;
+            w *= target as f32;
+            h *= target as f32;
+        }
+
+        // YOLO gives center x,y. Convert to two corners (in absolute coordinates)
+
+        let x1_model = x - (w / 2.0);
+        let y1_model = y - (h / 2.0);
+        let x2_model = x + (w / 2.0);
+        let y2_model = y + (h / 2.0);
+
+        // Map from model coords (with padding) to original image coords
+        // 1. Remove padding to get coords in resized image: x_resized = x_model - pad_x
+        // 2. Scale up to original size: x_original = x_resized / scale
+
+        let pad_x_f = pad_x as f32;
+        let pad_y_f = pad_y as f32;
+        let inv_scale = 1.0 / scale;
+
+        let bx1 = (x1_model - pad_x_f) * inv_scale;
+        let by1 = (y1_model - pad_y_f) * inv_scale;
+        let bx2 = (x2_model - pad_x_f) * inv_scale;
+        let by2 = (y2_model - pad_y_f) * inv_scale;
+
+        detections.push(Bbox::new(bx1, by1, bx2, by2, confidence));
+    }
+
+    println!(
+        "Detections (confidence >= {}): {}",
+        confidence_threshold,
+        detections.len()
+    );
+
+    println!("Detections: {:#?}", detections);
 
     Ok(())
 }
