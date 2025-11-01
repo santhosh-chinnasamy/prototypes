@@ -115,6 +115,54 @@ fn canonicalize_detection_output(
         }
     }
 }
+
+/// Faster NMS: sort descending by confidence, then mark suppressed indices
+fn non_max_suppression(mut boxes: Vec<Bbox>, iou_threshold: f32) -> Vec<Bbox> {
+    boxes.sort_by(|a, b| {
+        b.confidence
+            .partial_cmp(&a.confidence)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    let no_of_boxes = boxes.len();
+    let mut suppressed = vec![false; no_of_boxes];
+    let mut keep = Vec::with_capacity(no_of_boxes);
+    for i in 0..no_of_boxes {
+        if suppressed[i] {
+            continue;
+        }
+        let bi = &boxes[i];
+        keep.push(bi.clone());
+        for j in (i + 1)..no_of_boxes {
+            if suppressed[j] {
+                continue;
+            }
+            if calculate_iou(bi, &boxes[j]) > iou_threshold {
+                suppressed[j] = true;
+            }
+        }
+    }
+    keep
+}
+
+fn calculate_iou(a: &Bbox, b: &Bbox) -> f32 {
+    let x1 = a.x1.max(b.x1);
+    let y1 = a.y1.max(b.y1);
+    let x2 = a.x2.min(b.x2);
+    let y2 = a.y2.min(b.y2);
+
+    let intersection_area = (x2 - x1).max(0.0) * (y2 - y1).max(0.0);
+    let area_a = (a.x2 - a.x1) * (a.y2 - a.y1);
+    let area_b = (b.x2 - b.x1) * (b.y2 - b.y1);
+    let union_area = area_a + area_b - intersection_area;
+
+    if union_area <= 0.0 {
+        0.0
+    } else {
+        intersection_area / union_area
+    }
+}
+
 fn main() -> Result<(), Error> {
     let t = Instant::now();
     let model = tract_onnx::onnx()
@@ -239,12 +287,17 @@ fn main() -> Result<(), Error> {
     }
 
     println!(
-        "Detections (confidence >= {}): {}",
-        confidence_threshold,
-        detections.len()
+        "Detections count: {}, (confidence >= {})",
+        detections.len(),
+        confidence_threshold
     );
 
-    println!("Detections: {:#?}", detections);
+    // println!("Detections: {:#?}", detections);
 
+    // apply NMS
+    let final_boxes = non_max_suppression(detections, 0.4);
+
+    println!("Final boxes after NMS: {}", final_boxes.len());
+    // println!("Final boxes: {:#?}", final_boxes);
     Ok(())
 }
