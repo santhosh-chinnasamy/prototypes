@@ -209,153 +209,165 @@ fn main() -> Result<(), anyhow::Error> {
 
     println!("Model loaded in {:?}", t.elapsed());
 
-    // load image and preprocess
-    let raw_img = image::open("images/group.jpg")?;
-    let (orig_w, orig_h) = (raw_img.width(), raw_img.height());
+    // create a directory for output images
+    std::fs::create_dir_all("output")?;
 
-    println!("Image original size: {}x{}", orig_w, orig_h);
-
-    // letterbox resize to 640x640
-    let target = 640u32;
-    let scale = target as f32 / orig_w.max(orig_h) as f32;
-    let new_w = (orig_w as f32 * scale).round() as u32;
-    let new_h = (orig_h as f32 * scale).round() as u32;
-
-    println!("Resized to: {}x{}", new_w, new_h);
-
-    let resized = imageops::resize(&raw_img, new_w, new_h, FilterType::Triangle);
-
-    let pad_x = ((target - new_w) / 2) as i64;
-    let pad_y = ((target - new_h) / 2) as i64;
-
-    println!("Padding: x={} y={}", pad_x, pad_y);
-
-    // save resized image for debugging
-    let mut padded = DynamicImage::new_rgb8(target, target);
-    imageops::replace(&mut padded, &resized, pad_x, pad_y);
-    padded.save("images/padded.jpg")?;
-
-    // create input tensor in NCHW format https://machinelearning.wtf/terms/nchw/, normalized to 0..1
-    let mut input_arr = Array4::<f32>::zeros((1usize, 3usize, target as usize, target as usize));
-
-    for y in 0..(target as usize) {
-        for x in 0..(target as usize) {
-            let px = padded.get_pixel(x as u32, y as u32);
-            input_arr[[0, 0, y, x]] = px[0] as f32 / 255.0;
-            input_arr[[0, 1, y, x]] = px[1] as f32 / 255.0;
-            input_arr[[0, 2, y, x]] = px[2] as f32 / 255.0;
+    // iterate over all image files in the images/ directory
+    let image_dir = std::fs::read_dir("images")?;
+    let mut image_count = 0;
+    for entry in image_dir {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
         }
-    }
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        if !(ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "bmp" || ext == "gif") {
+            continue;
+        }
+        image_count += 1;
+        println!("\nProcessing image {}: {:?}", image_count, path);
+        let raw_img = match image::open(&path) {
+            Ok(img) => img,
+            Err(e) => {
+                eprintln!("Failed to open image {:?}: {}", path, e);
+                continue;
+            }
+        };
+        let (orig_w, orig_h) = (raw_img.width(), raw_img.height());
+        println!("Image original size: {}x{}", orig_w, orig_h);
 
-    let input_tensor: Tensor = input_arr.into();
+        // letterbox resize to 640x640
+        let target = 640u32;
+        let scale = target as f32 / orig_w.max(orig_h) as f32;
+        let new_w = (orig_w as f32 * scale).round() as u32;
+        let new_h = (orig_h as f32 * scale).round() as u32;
+        println!("Resized to: {}x{}", new_w, new_h);
 
-    println!("Inference started at ... {:?}", t.elapsed());
-    // run inference
-    let outputs = model.run(tvec!(input_tensor.into()))?;
-    println!("Inference done in {:?}", t.elapsed());
+        let resized = imageops::resize(&raw_img, new_w, new_h, FilterType::Triangle);
 
-    println!("Output tensor shape: {:?}", outputs[0].shape());
+        let pad_x = ((target - new_w) / 2) as i64;
+        let pad_y = ((target - new_h) / 2) as i64;
+        println!("Padding: x={} y={}", pad_x, pad_y);
 
-    let results = canonicalize_detection_output(&outputs[0], Some(5))?;
+        // Optionally save padded image for debugging
+        // let mut padded = DynamicImage::new_rgb8(target, target);
+        // imageops::replace(&mut padded, &resized, pad_x, pad_y);
+        // padded.save(format!("images/padded_{}.jpg", image_count))?;
 
-    let (rows, cols) = (results.shape()[0], results.shape()[1]);
-    println!("Detections shape: {}x{}", rows, cols);
+        // create input tensor in NCHW format, normalized to 0..1
+        let mut padded = DynamicImage::new_rgb8(target, target);
+        imageops::replace(&mut padded, &resized, pad_x, pad_y);
+        let mut input_arr =
+            Array4::<f32>::zeros((1usize, 3usize, target as usize, target as usize));
+        for y in 0..(target as usize) {
+            for x in 0..(target as usize) {
+                let px = padded.get_pixel(x as u32, y as u32);
+                input_arr[[0, 0, y, x]] = px[0] as f32 / 255.0;
+                input_arr[[0, 1, y, x]] = px[1] as f32 / 255.0;
+                input_arr[[0, 2, y, x]] = px[2] as f32 / 255.0;
+            }
+        }
+        let input_tensor: Tensor = input_arr.into();
 
-    if cols != 5 {
-        return Err(anyhow::anyhow!(
-            "Unexpected detection output columns: expected 5, got {}",
-            cols
-        ));
-    }
+        println!("Inference started at ... {:?}", t.elapsed());
+        // run inference
+        let outputs = model.run(tvec!(input_tensor.into()))?;
+        println!("Inference done in {:?}", t.elapsed());
 
-    //  detect whether coordinates appear to be normalized (0..1) or absolute (pixel values)
-    let sample_h = results[[0, 0]].abs();
-    let sample_w = results[[0, 0]].abs();
-    let likely_normalized = sample_h <= 1.01 && sample_w <= 1.01;
-    println!(
-        "Detections likely normalized: {} (sample values: h={} w={})",
-        likely_normalized, sample_h, sample_w
-    );
+        println!("Output tensor shape: {:?}", outputs[0].shape());
 
-    let confidence_threshold = 0.5f32;
-    let mut detections: Vec<Bbox> = Vec::with_capacity(256);
-
-    for i in 0..rows {
-        let confidence = results[[i, 4]];
-        if confidence < confidence_threshold {
+        let results = canonicalize_detection_output(&outputs[0], Some(5))?;
+        let (rows, cols) = (results.shape()[0], results.shape()[1]);
+        println!("Detections shape: {}x{}", rows, cols);
+        if cols != 5 {
+            eprintln!(
+                "Unexpected detection output columns: expected 5, got {}",
+                cols
+            );
             continue;
         }
 
-        let mut x = results[[i, 0]];
-        let mut y = results[[i, 1]];
-        let mut w = results[[i, 2]];
-        let mut h = results[[i, 3]];
+        // detect whether coordinates appear to be normalized (0..1) or absolute (pixel values)
+        let sample_h = results[[0, 0]].abs();
+        let sample_w = results[[0, 0]].abs();
+        let likely_normalized = sample_h <= 1.01 && sample_w <= 1.01;
+        println!(
+            "Detections likely normalized: {} (sample values: h={} w={})",
+            likely_normalized, sample_h, sample_w
+        );
 
-        //  If normalized, convert to absolute coordinates
-        if likely_normalized {
-            x *= target as f32;
-            y *= target as f32;
-            w *= target as f32;
-            h *= target as f32;
-        }
-
-        // YOLO gives center x,y. Convert to two corners (in absolute coordinates)
-
-        let x1_model = x - (w / 2.0);
-        let y1_model = y - (h / 2.0);
-        let x2_model = x + (w / 2.0);
-        let y2_model = y + (h / 2.0);
-
-        // Map from model coords (with padding) to original image coords
-        // 1. Remove padding to get coords in resized image: x_resized = x_model - pad_x
-        // 2. Scale up to original size: x_original = x_resized / scale
-
-        let pad_x_f = pad_x as f32;
-        let pad_y_f = pad_y as f32;
-        let inv_scale = 1.0 / scale;
-
-        let bx1 = (x1_model - pad_x_f) * inv_scale;
-        let by1 = (y1_model - pad_y_f) * inv_scale;
-        let bx2 = (x2_model - pad_x_f) * inv_scale;
-        let by2 = (y2_model - pad_y_f) * inv_scale;
-
-        detections.push(Bbox::new(bx1, by1, bx2, by2, confidence));
-    }
-
-    println!(
-        "Detections count: {}, (confidence >= {})",
-        detections.len(),
-        confidence_threshold
-    );
-
-    // println!("Detections: {:#?}", detections);
-
-    // apply NMS
-    let final_boxes = non_max_suppression(detections, 0.4);
-
-    println!("Final boxes after NMS: {}", final_boxes.len());
-    // println!("Final boxes: {:#?}", final_boxes);
-    println!("Processing done in {:?}", t.elapsed());
-
-    // create a directory for output images
-    std::fs::create_dir_all("output")?;
-    let mut rgb_owned = raw_img.to_rgb8();
-    for (idx, bbox) in final_boxes.iter().enumerate() {
-        match bbox.crop_bbox(&mut rgb_owned) {
-            Ok(c) => {
-                let out_path = format!("output/face_{}.jpg", idx + 1);
-                c.save(&out_path)?;
-                println!("Cropped face saved to {}", out_path);
+        let confidence_threshold = 0.5f32;
+        let mut detections: Vec<Bbox> = Vec::with_capacity(256);
+        for i in 0..rows {
+            let confidence = results[[i, 4]];
+            if confidence < confidence_threshold {
+                continue;
             }
-            Err(e) => {
-                eprintln!("Failed to crop bbox {:?}: {}", idx, e);
+            let mut x = results[[i, 0]];
+            let mut y = results[[i, 1]];
+            let mut w = results[[i, 2]];
+            let mut h = results[[i, 3]];
+            // If normalized, convert to absolute coordinates
+            if likely_normalized {
+                x *= target as f32;
+                y *= target as f32;
+                w *= target as f32;
+                h *= target as f32;
+            }
+            // YOLO gives center x,y. Convert to two corners (in absolute coordinates)
+            let x1_model = x - (w / 2.0);
+            let y1_model = y - (h / 2.0);
+            let x2_model = x + (w / 2.0);
+            let y2_model = y + (h / 2.0);
+            // Map from model coords (with padding) to original image coords
+            let pad_x_f = pad_x as f32;
+            let pad_y_f = pad_y as f32;
+            let inv_scale = 1.0 / scale;
+            let bx1 = (x1_model - pad_x_f) * inv_scale;
+            let by1 = (y1_model - pad_y_f) * inv_scale;
+            let bx2 = (x2_model - pad_x_f) * inv_scale;
+            let by2 = (y2_model - pad_y_f) * inv_scale;
+            detections.push(Bbox::new(bx1, by1, bx2, by2, confidence));
+        }
+        println!(
+            "Detections count: {}, (confidence >= {})",
+            detections.len(),
+            confidence_threshold
+        );
+        // apply NMS
+        let final_boxes = non_max_suppression(detections, 0.4);
+        println!("Final boxes after NMS: {}", final_boxes.len());
+        println!("Processing done in {:?}", t.elapsed());
+
+        let mut rgb_owned = raw_img.to_rgb8();
+        for (idx, bbox) in final_boxes.iter().enumerate() {
+            match bbox.crop_bbox(&mut rgb_owned) {
+                Ok(c) => {
+                    let out_path = format!(
+                        "output/{}_face_{}.jpg",
+                        path.file_stem().and_then(|s| s.to_str()).unwrap_or("img"),
+                        idx + 1
+                    );
+                    c.save(&out_path)?;
+                    println!("Cropped face saved to {}", out_path);
+                }
+                Err(e) => {
+                    eprintln!("Failed to crop bbox {:?}: {}", idx, e);
+                }
             }
         }
+        println!(
+            "All cropped faces saved in output/ directory. time elapsed: {:?}",
+            t.elapsed()
+        );
     }
-    println!(
-        "All cropped faces saved in output/ directory. time elapsed: {:?}",
-        t.elapsed()
-    );
+    println!("\nProcessed {} images from images/ directory.", image_count);
 
+    println!("Total time elapsed: {:?}", t.elapsed());
     Ok(())
 }
