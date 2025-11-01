@@ -1,4 +1,3 @@
-use anyhow::{Error, Ok};
 use image::{
     DynamicImage, GenericImageView,
     imageops::{self, FilterType},
@@ -25,6 +24,43 @@ impl Bbox {
             y2,
             confidence,
         }
+    }
+    /// Crop the box from an owned rgb image buffer (small copy).
+    pub fn crop_bbox(&self, rgb_img: &mut image::RgbImage) -> Result<DynamicImage, anyhow::Error> {
+        // clamp coordinates to image bounds & ensure non-negative
+        let img_w = rgb_img.width();
+        let img_h = rgb_img.height();
+
+        let mut x1 = self.x1.max(0.0).min((img_w - 1) as f32) as u32;
+        let mut y1 = self.y1.max(0.0).min((img_h - 1) as f32) as u32;
+        let mut x2 = self.x2.max(0.0).min(img_w as f32) as u32;
+        let mut y2 = self.y2.max(0.0).min(img_h as f32) as u32;
+
+        // Ensure width/height non-zero (expand by 1 px if needed)
+        if x2 <= x1 {
+            if x1 > 0 {
+                x1 -= 1;
+            } else {
+                x2 = (x1 + 1).min(img_w);
+            }
+        }
+        if y2 <= y1 {
+            if y1 > 0 {
+                y1 -= 1;
+            } else {
+                y2 = (y1 + 1).min(img_h);
+            }
+        }
+
+        let w = x2.saturating_sub(x1);
+        let h = y2.saturating_sub(y1);
+
+        if w == 0 || h == 0 {
+            return Err(anyhow::anyhow!("crop would be empty: w={} h={}", w, h));
+        }
+
+        let sub = image::imageops::crop_imm(rgb_img, x1, y1, w, h);
+        Ok(DynamicImage::ImageRgb8(sub.to_image()))
     }
 }
 
@@ -163,7 +199,7 @@ fn calculate_iou(a: &Bbox, b: &Bbox) -> f32 {
     }
 }
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<(), anyhow::Error> {
     let t = Instant::now();
     let model = tract_onnx::onnx()
         .model_for_path("models/yolov8n-face.onnx")?
@@ -299,5 +335,27 @@ fn main() -> Result<(), Error> {
 
     println!("Final boxes after NMS: {}", final_boxes.len());
     // println!("Final boxes: {:#?}", final_boxes);
+    println!("Processing done in {:?}", t.elapsed());
+
+    // create a directory for output images
+    std::fs::create_dir_all("output")?;
+    let mut rgb_owned = raw_img.to_rgb8();
+    for (idx, bbox) in final_boxes.iter().enumerate() {
+        match bbox.crop_bbox(&mut rgb_owned) {
+            Ok(c) => {
+                let out_path = format!("output/face_{}.jpg", idx + 1);
+                c.save(&out_path)?;
+                println!("Cropped face saved to {}", out_path);
+            }
+            Err(e) => {
+                eprintln!("Failed to crop bbox {:?}: {}", idx, e);
+            }
+        }
+    }
+    println!(
+        "All cropped faces saved in output/ directory. time elapsed: {:?}",
+        t.elapsed()
+    );
+
     Ok(())
 }
