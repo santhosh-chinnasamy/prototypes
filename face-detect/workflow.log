@@ -1,0 +1,148 @@
+Model loaded in 1.298358s
+Stage LoadImage done in 5.457499834s
+Stage PrepareInput done in 10.102594542s
+Stage Inference done in 4.688924208s
+Stage Postprocess done in 314.125µs
+Saved output/DSC03027_face_1.jpg
+Saved output/DSC03027_face_2.jpg
+Stage SaveCrops done in 460.104542ms
+Pipeline for "images/DSC03027.JPG" finished in 20.709469583s
+Stage LoadImage done in 6.29008575s
+Stage PrepareInput done in 9.898335792s
+Stage Inference done in 4.5946025s
+Stage Postprocess done in 293µs
+Saved output/SAM04573_face_1.jpg
+Saved output/SAM04573_face_2.jpg
+Stage SaveCrops done in 156.160334ms
+Pipeline for "images/SAM04573.JPG" finished in 20.939514459s
+Stage LoadImage done in 5.870838333s
+Stage PrepareInput done in 9.837633542s
+Stage Inference done in 4.679546958s
+Stage Postprocess done in 300.75µs
+Saved output/SAM05631_face_1.jpg
+Saved output/SAM05631_face_2.jpg
+Stage SaveCrops done in 71.820292ms
+Pipeline for "images/SAM05631.JPG" finished in 20.460180917s
+Stage LoadImage done in 6.005577625s
+Stage PrepareInput done in 9.831527584s
+Stage Inference done in 4.68821425s
+Stage Postprocess done in 306.083µs
+Saved output/SAM03687_face_1.jpg
+Stage SaveCrops done in 133.645583ms
+Pipeline for "images/SAM03687.JPG" finished in 20.659316875s
+Stage LoadImage done in 355.361916ms
+Stage PrepareInput done in 1.477293708s
+Stage Inference done in 4.815789083s
+Stage Postprocess done in 289.541µs
+Saved output/20240901_135207_face_1.jpg
+Stage SaveCrops done in 59.676417ms
+Pipeline for "images/20240901_135207.jpg" finished in 6.708453083s
+Stage LoadImage done in 6.052564708s
+Stage PrepareInput done in 9.816655375s
+Stage Inference done in 4.642334167s
+Stage Postprocess done in 303.084µs
+Saved output/SAM02788_face_1.jpg
+Saved output/SAM02788_face_2.jpg
+Saved output/SAM02788_face_3.jpg
+Stage SaveCrops done in 170.322792ms
+Pipeline for "images/SAM02788.JPG" finished in 20.682223708s
+Stage LoadImage done in 914.925ms
+Stage PrepareInput done in 2.524572792s
+Stage Inference done in 4.628422125s
+Stage Postprocess done in 291.625µs
+Saved output/santhosh_face_1.jpg
+Stage SaveCrops done in 45.852167ms
+Pipeline for "images/santhosh.jpg" finished in 8.114098625s
+Stage LoadImage done in 6.182343584s
+Stage PrepareInput done in 9.846933916s
+Stage Inference done in 4.655058s
+Stage Postprocess done in 294.292µs
+Saved output/SAM04528_face_1.jpg
+Stage SaveCrops done in 82.298834ms
+Pipeline for "images/SAM04528.JPG" finished in 20.766960292s
+Stage LoadImage done in 5.416324625s
+Stage PrepareInput done in 9.833028458s
+Stage Inference done in 4.571712417s
+Stage Postprocess done in 300.166µs
+Saved output/DSC03083_face_1.jpg
+Saved output/DSC03083_face_2.jpg
+Stage SaveCrops done in 350.769084ms
+Pipeline for "images/DSC03083.JPG" finished in 20.17217025s
+Stage LoadImage done in 6.063389s
+Stage PrepareInput done in 9.817765542s
+Stage Inference done in 4.636965834s
+Stage Postprocess done in 335.792µs
+Saved output/SAM02816_face_1.jpg
+Saved output/SAM02816_face_2.jpg
+Saved output/SAM02816_face_3.jpg
+Saved output/SAM02816_face_4.jpg
+Stage SaveCrops done in 215.921958ms
+Pipeline for "images/SAM02816.JPG" finished in 20.734421833s
+Stage LoadImage done in 6.261953083s
+Stage PrepareInput done in 9.87539175s
+Stage Inference done in 4.6352s
+Stage Postprocess done in 309.958µs
+Saved output/SAM04491_face_1.jpg
+Saved output/SAM04491_face_2.jpg
+Stage SaveCrops done in 276.084959ms
+Pipeline for "images/SAM04491.JPG" finished in 21.048993916s
+Stage LoadImage done in 6.055794584s
+Stage PrepareInput done in 9.842000459s
+Stage Inference done in 4.637513917s
+Stage Postprocess done in 314.916µs
+Saved output/SAM02814_face_1.jpg
+Saved output/SAM02814_face_2.jpg
+Saved output/SAM02814_face_3.jpg
+Saved output/SAM02814_face_4.jpg
+Stage SaveCrops done in 217.164ms
+Pipeline for "images/SAM02814.JPG" finished in 20.752843542s
+Stage LoadImage done in 6.164721166s
+Stage PrepareInput done in 9.836216084s
+Stage Inference done in 4.708389458s
+Stage Postprocess done in 311.625µs
+Saved output/SAM04496_face_1.jpg
+Stage SaveCrops done in 158.165125ms
+Pipeline for "images/SAM04496.JPG" finished in 20.867846792s
+Stage LoadImage done in 5.983760625s
+Stage PrepareInput done in 10.066772s
+Stage Inference done in 4.714659375s
+Stage Postprocess done in 297.792µs
+Saved output/SAM03892_face_1.jpg
+Saved output/SAM03892_face_2.jpg
+Stage SaveCrops done in 217.148708ms
+Pipeline for "images/SAM03892.JPG" finished in 20.982685542s
+Stage LoadImage done in 6.2394645s
+Stage PrepareInput done in 9.848428541s
+Stage Inference done in 4.813647959s
+Stage Postprocess done in 311.084µs
+Saved output/SAM03823_face_1.jpg
+Stage SaveCrops done in 65.261834ms
+Pipeline for "images/SAM03823.JPG" finished in 20.96715425s
+Stage LoadImage done in 6.223084s
+Stage PrepareInput done in 9.837449709s
+Stage Inference done in 4.932241875s
+Stage Postprocess done in 289.958µs
+Saved output/SAM03826_face_1.jpg
+Saved output/SAM03826_face_2.jpg
+Stage SaveCrops done in 116.728583ms
+Pipeline for "images/SAM03826.JPG" finished in 21.109840417s
+Stage LoadImage done in 6.225516625s
+Stage PrepareInput done in 9.828283083s
+Stage Inference done in 4.820954541s
+Stage Postprocess done in 287.417µs
+Saved output/SAM03824_face_1.jpg
+Saved output/SAM03824_face_2.jpg
+Stage SaveCrops done in 104.723375ms
+Pipeline for "images/SAM03824.JPG" finished in 20.979802875s
+Stage LoadImage done in 6.215295625s
+Stage PrepareInput done in 9.814563291s
+Stage Inference done in 4.791577792s
+Stage Postprocess done in 307.417µs
+Saved output/SAM03825_face_1.jpg
+Saved output/SAM03825_face_2.jpg
+Stage SaveCrops done in 111.692667ms
+Pipeline for "images/SAM03825.JPG" finished in 20.933476708s
+Processed 18 images. Total elapsed: 348.888821416s
+
+cargo run  347.37s user 1.22s system 96% cpu 6:00.29 total
+tee workflow.log  0.00s user 0.01s system 0% cpu 6:00.29 total

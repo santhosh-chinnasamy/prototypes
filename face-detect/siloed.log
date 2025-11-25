@@ -1,0 +1,222 @@
+Model loaded in 1.274353333s
+
+Processing image: "images/DSC03027.JPG"
+Image original size: 7008x4672
+Inference started at ... 16.692351666s
+Inference done in 21.333263125s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 2
+Processing done in 21.333582s
+Cropped face saved to output/DSC03027_face_1.jpg
+Cropped face saved to output/DSC03027_face_2.jpg
+All cropped faces saved in output/ directory. time elapsed: 21.798167291s
+Total time for image "images/DSC03027.JPG": 20.523676416s
+
+Processing image: "images/SAM04573.JPG"
+Image original size: 7008x4672
+Inference started at ... 37.843512458s
+Inference done in 42.60270975s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 2
+Processing done in 42.60301325s
+Cropped face saved to output/SAM04573_face_1.jpg
+Cropped face saved to output/SAM04573_face_2.jpg
+All cropped faces saved in output/ directory. time elapsed: 42.759547666s
+Total time for image "images/SAM04573.JPG": 20.961376084s
+
+Processing image: "images/SAM05631.JPG"
+Image original size: 7008x4672
+Inference started at ... 58.509993666s
+Inference done in 63.134242333s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 2
+Processing done in 63.134568708s
+Cropped face saved to output/SAM05631_face_1.jpg
+Cropped face saved to output/SAM05631_face_2.jpg
+All cropped faces saved in output/ directory. time elapsed: 63.207464958s
+Total time for image "images/SAM05631.JPG": 20.447913417s
+
+Processing image: "images/SAM03687.JPG"
+Image original size: 7008x4672
+Inference started at ... 79.057845416s
+Inference done in 83.7340335s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 1
+Processing done in 83.734334666s
+Cropped face saved to output/SAM03687_face_1.jpg
+All cropped faces saved in output/ directory. time elapsed: 83.879700625s
+Total time for image "images/SAM03687.JPG": 20.672231834s
+
+Processing image: "images/20240901_135207.jpg"
+Image original size: 1341x1788
+Inference started at ... 85.718229291s
+Inference done in 90.326788583s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 1
+Processing done in 90.327095041s
+Cropped face saved to output/20240901_135207_face_1.jpg
+All cropped faces saved in output/ directory. time elapsed: 90.387630958s
+Total time for image "images/20240901_135207.jpg": 6.507927292s
+
+Processing image: "images/SAM02788.JPG"
+Image original size: 7008x4672
+Inference started at ... 106.305698041s
+Inference done in 111.067075666s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 3
+Processing done in 111.067394416s
+Cropped face saved to output/SAM02788_face_1.jpg
+Cropped face saved to output/SAM02788_face_2.jpg
+Cropped face saved to output/SAM02788_face_3.jpg
+All cropped faces saved in output/ directory. time elapsed: 111.238728625s
+Total time for image "images/SAM02788.JPG": 20.851094417s
+
+Processing image: "images/santhosh.jpg"
+Image original size: 2000x2992
+Inference started at ... 114.678331s
+Inference done in 119.350533875s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 1
+Processing done in 119.350840125s
+Cropped face saved to output/santhosh_face_1.jpg
+All cropped faces saved in output/ directory. time elapsed: 119.397412458s
+Total time for image "images/santhosh.jpg": 8.158680875s
+
+Processing image: "images/SAM04528.JPG"
+Image original size: 7008x4672
+Inference started at ... 135.444652791s
+Inference done in 140.023927208s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 1
+Processing done in 140.024232333s
+Cropped face saved to output/SAM04528_face_1.jpg
+All cropped faces saved in output/ directory. time elapsed: 140.1056645s
+Total time for image "images/SAM04528.JPG": 20.708249583s
+
+Processing image: "images/DSC03083.JPG"
+Image original size: 7008x4672
+Inference started at ... 155.453911625s
+Inference done in 160.144501458s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 2
+Processing done in 160.144828458s
+Cropped face saved to output/DSC03083_face_1.jpg
+Cropped face saved to output/DSC03083_face_2.jpg
+All cropped faces saved in output/ directory. time elapsed: 160.503703416s
+Total time for image "images/DSC03083.JPG": 20.398035916s
+
+Processing image: "images/SAM02816.JPG"
+Image original size: 7008x4672
+Inference started at ... 176.437902916s
+Inference done in 181.076556208s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 4
+Processing done in 181.076886958s
+Cropped face saved to output/SAM02816_face_1.jpg
+Cropped face saved to output/SAM02816_face_2.jpg
+Cropped face saved to output/SAM02816_face_3.jpg
+Cropped face saved to output/SAM02816_face_4.jpg
+All cropped faces saved in output/ directory. time elapsed: 181.294442791s
+Total time for image "images/SAM02816.JPG": 20.790735375s
+
+Processing image: "images/SAM04491.JPG"
+Image original size: 7008x4672
+Inference started at ... 197.44795975s
+Inference done in 202.100175333s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 2
+Processing done in 202.100566583s
+Cropped face saved to output/SAM04491_face_1.jpg
+Cropped face saved to output/SAM04491_face_2.jpg
+All cropped faces saved in output/ directory. time elapsed: 202.37615625s
+Total time for image "images/SAM04491.JPG": 21.081707458s
+
+Processing image: "images/SAM02814.JPG"
+Image original size: 7008x4672
+Inference started at ... 218.286483625s
+Inference done in 223.075009291s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 4
+Processing done in 223.0753475s
+Cropped face saved to output/SAM02814_face_1.jpg
+Cropped face saved to output/SAM02814_face_2.jpg
+Cropped face saved to output/SAM02814_face_3.jpg
+Cropped face saved to output/SAM02814_face_4.jpg
+All cropped faces saved in output/ directory. time elapsed: 223.294872708s
+Total time for image "images/SAM02814.JPG": 20.918712083s
+
+Processing image: "images/SAM04496.JPG"
+Image original size: 7008x4672
+Inference started at ... 239.315539708s
+Inference done in 243.9334985s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 1
+Processing done in 243.933836333s
+Cropped face saved to output/SAM04496_face_1.jpg
+All cropped faces saved in output/ directory. time elapsed: 244.089211666s
+Total time for image "images/SAM04496.JPG": 20.794335042s
+
+Processing image: "images/SAM03892.JPG"
+Image original size: 7008x4672
+Inference started at ... 259.906919416s
+Inference done in 264.545067208s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 2
+Processing done in 264.545384s
+Cropped face saved to output/SAM03892_face_1.jpg
+Cropped face saved to output/SAM03892_face_2.jpg
+All cropped faces saved in output/ directory. time elapsed: 264.760671958s
+Total time for image "images/SAM03892.JPG": 20.671457291s
+
+Processing image: "images/SAM03823.JPG"
+Image original size: 7008x4672
+Inference started at ... 280.827980125s
+Inference done in 285.513537291s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 1
+Processing done in 285.513847791s
+Cropped face saved to output/SAM03823_face_1.jpg
+All cropped faces saved in output/ directory. time elapsed: 285.579006666s
+Total time for image "images/SAM03823.JPG": 20.818331917s
+
+Processing image: "images/SAM03826.JPG"
+Image original size: 7008x4672
+Inference started at ... 301.659717583s
+Inference done in 306.357286791s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 2
+Processing done in 306.357610583s
+Cropped face saved to output/SAM03826_face_1.jpg
+Cropped face saved to output/SAM03826_face_2.jpg
+All cropped faces saved in output/ directory. time elapsed: 306.476295625s
+Total time for image "images/SAM03826.JPG": 20.89728525s
+
+Processing image: "images/SAM03824.JPG"
+Image original size: 7008x4672
+Inference started at ... 322.599903791s
+Inference done in 327.132090666s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 2
+Processing done in 327.132413583s
+Cropped face saved to output/SAM03824_face_1.jpg
+Cropped face saved to output/SAM03824_face_2.jpg
+All cropped faces saved in output/ directory. time elapsed: 327.237181666s
+Total time for image "images/SAM03824.JPG": 20.760882208s
+
+Processing image: "images/SAM03825.JPG"
+Image original size: 7008x4672
+Inference started at ... 343.421808166s
+Inference done in 348.134529125s
+Output tensor shape: [8400, 5]
+Final boxes after NMS: 2
+Processing done in 348.134832916s
+Cropped face saved to output/SAM03825_face_1.jpg
+Cropped face saved to output/SAM03825_face_2.jpg
+All cropped faces saved in output/ directory. time elapsed: 348.261797416s
+Total time for image "images/SAM03825.JPG": 21.024612875s
+
+Processed 18 images from images/ directory.
+Total time elapsed: 348.261825625s
+
+cargo run  346.67s user 1.36s system 99% cpu 5:50.99 total
+tee siloed.log  0.00s user 0.01s system 0% cpu 5:50.98 total

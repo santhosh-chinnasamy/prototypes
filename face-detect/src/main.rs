@@ -1,12 +1,15 @@
+use anyhow::Result;
 use image::{
     DynamicImage, GenericImageView,
     imageops::{self, FilterType},
 };
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
 use tract_ndarray::{Array2, Array4, Axis, Ix2};
 use tract_onnx::prelude::*;
 
+/// Reuse your existing Bbox impl (unchanged except Clone + Debug derived).
 #[derive(Debug, Clone)]
 pub struct Bbox {
     pub x1: f32,
@@ -55,7 +58,6 @@ impl Bbox {
 
         let w = x2.saturating_sub(x1);
         let h = y2.saturating_sub(y1);
-
         if w == 0 || h == 0 {
             return Err(anyhow::anyhow!("crop would be empty: w={} h={}", w, h));
         }
@@ -65,6 +67,9 @@ impl Bbox {
     }
 }
 
+/// Reuse your canonicalize_detection_output, nms, iou, etc.
+/// (For brevity in this example they are included as functions,
+/// identical to your original; paste your original implementations.)
 fn canonicalize_detection_output(
     tval: &tract_onnx::prelude::TValue,
     preferred_cols: Option<usize>,
@@ -125,7 +130,6 @@ fn canonicalize_detection_output(
                 }
             }
 
-            // case: [N, 1, M] -> axis(1)
             if d1 == 1 {
                 let two = arr_view.index_axis(Axis(1), 0).to_owned();
                 return Ok(two.into_dimensionality::<Ix2>().unwrap());
@@ -144,42 +148,13 @@ fn canonicalize_detection_output(
         }
         other => {
             let shape_opt = tval.to_array_view::<f32>().ok().map(|a| a.shape().to_vec());
-            return Err(anyhow::anyhow!(
+            Err(anyhow::anyhow!(
                 "Unhandled detection output ndim = {} shape = {:?}",
                 other,
                 shape_opt
-            ));
+            ))
         }
     }
-}
-
-/// Faster NMS: sort descending by confidence, then mark suppressed indices
-fn non_max_suppression(mut boxes: Vec<Bbox>, iou_threshold: f32) -> Vec<Bbox> {
-    boxes.sort_by(|a, b| {
-        b.confidence
-            .partial_cmp(&a.confidence)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    let no_of_boxes = boxes.len();
-    let mut suppressed = vec![false; no_of_boxes];
-    let mut keep = Vec::with_capacity(no_of_boxes);
-    for i in 0..no_of_boxes {
-        if suppressed[i] {
-            continue;
-        }
-        let bi = &boxes[i];
-        keep.push(bi.clone());
-        for j in (i + 1)..no_of_boxes {
-            if suppressed[j] {
-                continue;
-            }
-            if calculate_iou(bi, &boxes[j]) > iou_threshold {
-                suppressed[j] = true;
-            }
-        }
-    }
-    keep
 }
 
 fn calculate_iou(a: &Bbox, b: &Bbox) -> f32 {
@@ -200,6 +175,272 @@ fn calculate_iou(a: &Bbox, b: &Bbox) -> f32 {
     }
 }
 
+fn non_max_suppression(mut boxes: Vec<Bbox>, iou_threshold: f32) -> Vec<Bbox> {
+    boxes.sort_by(|a, b| {
+        b.confidence
+            .partial_cmp(&a.confidence)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let n = boxes.len();
+    let mut suppressed = vec![false; n];
+    let mut keep = Vec::with_capacity(n);
+    for i in 0..n {
+        if suppressed[i] {
+            continue;
+        }
+        let bi = &boxes[i];
+        keep.push(bi.clone());
+        for j in (i + 1)..n {
+            if suppressed[j] {
+                continue;
+            }
+            if calculate_iou(bi, &boxes[j]) > iou_threshold {
+                suppressed[j] = true;
+            }
+        }
+    }
+    keep
+}
+
+/// Pipeline context: stage inputs/outputs share a Context object.
+pub struct Context {
+    pub path: PathBuf,
+    pub raw_img: Option<DynamicImage>,
+    pub padded: Option<DynamicImage>,
+    pub input_arr: Option<Array4<f32>>,
+    pub scale: f32,
+    pub pad_x: i64,
+    pub pad_y: i64,
+    pub target: u32,
+    pub results: Option<Array2<f32>>,
+    pub final_boxes: Option<Vec<Bbox>>,
+}
+
+impl Context {
+    pub fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            raw_img: None,
+            padded: None,
+            input_arr: None,
+            scale: 1.0,
+            pad_x: 0,
+            pad_y: 0,
+            target: 640,
+            results: None,
+            final_boxes: None,
+        }
+    }
+}
+
+/// Stage trait: each stage mutates Context.
+/// `shared` holds read-only shared resources such as the loaded model.
+pub trait Stage {
+    fn name(&self) -> &str;
+    fn run(&self, ctx: &mut Context, shared: &Shared) -> Result<()>;
+}
+
+/// Shared resources passed to stages.
+pub struct Shared {
+    pub model: Arc<SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>>,
+}
+
+impl Shared {
+    pub fn new(
+        model: SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>,
+    ) -> Self {
+        Self {
+            model: Arc::new(model),
+        }
+    }
+}
+
+/// Stage implementations follow. Small focused responsibilities.
+
+/// Loads image from disk into Context::raw_img.
+pub struct LoadImageStage;
+impl Stage for LoadImageStage {
+    fn name(&self) -> &str {
+        "LoadImage"
+    }
+    fn run(&self, ctx: &mut Context, _shared: &Shared) -> Result<()> {
+        let img = image::open(&ctx.path)?;
+        ctx.raw_img = Some(img);
+        Ok(())
+    }
+}
+
+/// Prepares padded image and input tensor (same logic as your prepare_input).
+pub struct PrepareInputStage;
+impl Stage for PrepareInputStage {
+    fn name(&self) -> &str {
+        "PrepareInput"
+    }
+    fn run(&self, ctx: &mut Context, _shared: &Shared) -> Result<()> {
+        let raw = ctx
+            .raw_img
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("raw_img missing"))?;
+        let target = ctx.target;
+        let (orig_w, orig_h) = (raw.width(), raw.height());
+        let scale = target as f32 / orig_w.max(orig_h) as f32;
+        let new_w = (orig_w as f32 * scale).round() as u32;
+        let new_h = (orig_h as f32 * scale).round() as u32;
+        let resized = imageops::resize(raw, new_w, new_h, FilterType::Triangle);
+        let pad_x = ((target - new_w) / 2) as i64;
+        let pad_y = ((target - new_h) / 2) as i64;
+        let mut padded = DynamicImage::new_rgb8(target, target);
+        imageops::replace(&mut padded, &resized, pad_x, pad_y);
+
+        // Build input array
+        let mut input_arr =
+            Array4::<f32>::zeros((1usize, 3usize, target as usize, target as usize));
+        for y in 0..(target as usize) {
+            for x in 0..(target as usize) {
+                let px = padded.get_pixel(x as u32, y as u32);
+                input_arr[[0, 0, y, x]] = px[0] as f32 / 255.0;
+                input_arr[[0, 1, y, x]] = px[1] as f32 / 255.0;
+                input_arr[[0, 2, y, x]] = px[2] as f32 / 255.0;
+            }
+        }
+
+        ctx.padded = Some(padded);
+        ctx.input_arr = Some(input_arr);
+        ctx.scale = scale;
+        ctx.pad_x = pad_x;
+        ctx.pad_y = pad_y;
+        Ok(())
+    }
+}
+
+/// Runs inference using shared.model, stores canonicalized Array2 into ctx.results.
+pub struct InferenceStage;
+impl Stage for InferenceStage {
+    fn name(&self) -> &str {
+        "Inference"
+    }
+    fn run(&self, ctx: &mut Context, shared: &Shared) -> Result<()> {
+        let input_arr = ctx
+            .input_arr
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("input_arr missing"))?;
+        let input_tensor: Tensor = input_arr.into();
+        let outputs = shared.model.run(tvec!(input_tensor.into()))?;
+        let results = canonicalize_detection_output(&outputs[0], Some(5))?;
+        ctx.results = Some(results);
+        Ok(())
+    }
+}
+
+/// Postprocess detections -> boxes + NMS
+pub struct PostprocessStage {
+    pub confidence_threshold: f32,
+    pub iou_threshold: f32,
+}
+impl Stage for PostprocessStage {
+    fn name(&self) -> &str {
+        "Postprocess"
+    }
+    fn run(&self, ctx: &mut Context, _shared: &Shared) -> Result<()> {
+        let results = ctx
+            .results
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("results missing"))?;
+        let (rows, cols) = (results.shape()[0], results.shape()[1]);
+        if cols != 5 {
+            ctx.final_boxes = Some(vec![]);
+            return Ok(());
+        }
+
+        let sample_h = results[[0, 0]].abs();
+        let sample_w = results[[0, 0]].abs();
+        let likely_normalized = sample_h <= 1.01 && sample_w <= 1.01;
+        let target = ctx.target;
+        let mut detections = Vec::new();
+
+        for i in 0..rows {
+            let confidence = results[[i, 4]];
+            if confidence < self.confidence_threshold {
+                continue;
+            }
+            let mut x = results[[i, 0]];
+            let mut y = results[[i, 1]];
+            let mut w = results[[i, 2]];
+            let mut h = results[[i, 3]];
+            if likely_normalized {
+                x *= target as f32;
+                y *= target as f32;
+                w *= target as f32;
+                h *= target as f32;
+            }
+            let x1_model = x - (w / 2.0);
+            let y1_model = y - (h / 2.0);
+            let x2_model = x + (w / 2.0);
+            let y2_model = y + (h / 2.0);
+
+            let pad_x_f = ctx.pad_x as f32;
+            let pad_y_f = ctx.pad_y as f32;
+            let inv_scale = 1.0 / ctx.scale;
+            let bx1 = (x1_model - pad_x_f) * inv_scale;
+            let by1 = (y1_model - pad_y_f) * inv_scale;
+            let bx2 = (x2_model - pad_x_f) * inv_scale;
+            let by2 = (y2_model - pad_y_f) * inv_scale;
+            detections.push(Bbox::new(bx1, by1, bx2, by2, confidence));
+        }
+
+        let final_boxes = non_max_suppression(detections, self.iou_threshold);
+        ctx.final_boxes = Some(final_boxes);
+        Ok(())
+    }
+}
+
+/// Save crops to output directory
+pub struct SaveCropsStage {
+    pub out_dir: PathBuf,
+}
+impl Stage for SaveCropsStage {
+    fn name(&self) -> &str {
+        "SaveCrops"
+    }
+    fn run(&self, ctx: &mut Context, _shared: &Shared) -> Result<()> {
+        let raw = ctx
+            .raw_img
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("raw_img missing"))?;
+        let final_boxes = ctx
+            .final_boxes
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("final_boxes missing"))?;
+        let mut rgb_owned = raw.to_rgb8();
+
+        std::fs::create_dir_all(&self.out_dir)?;
+        let stem = ctx
+            .path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("img");
+
+        for (idx, bbox) in final_boxes.iter().enumerate() {
+            match bbox.crop_bbox(&mut rgb_owned) {
+                Ok(c) => {
+                    let out_path =
+                        format!("{}/{}_face_{}.jpg", self.out_dir.display(), stem, idx + 1);
+                    if let Err(e) = c.save(&out_path) {
+                        eprintln!("Failed to save {}: {}", out_path, e);
+                    } else {
+                        println!("Saved {}", out_path);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to crop bbox {}: {}", idx, e);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Helper: load model (same as your load_model)
 fn load_model() -> Result<
     SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>,
     anyhow::Error,
@@ -212,157 +453,52 @@ fn load_model() -> Result<
     Ok(model)
 }
 
-fn prepare_input(
-    raw_img: &DynamicImage,
-    target: u32,
-) -> (DynamicImage, Array4<f32>, f32, i64, i64) {
-    let (orig_w, orig_h) = (raw_img.width(), raw_img.height());
-    let scale = target as f32 / orig_w.max(orig_h) as f32;
-    let new_w = (orig_w as f32 * scale).round() as u32;
-    let new_h = (orig_h as f32 * scale).round() as u32;
-    let resized = imageops::resize(raw_img, new_w, new_h, FilterType::Triangle);
-    let pad_x = ((target - new_w) / 2) as i64;
-    let pad_y = ((target - new_h) / 2) as i64;
-    let mut padded = DynamicImage::new_rgb8(target, target);
-    imageops::replace(&mut padded, &resized, pad_x, pad_y);
-    let mut input_arr = Array4::<f32>::zeros((1usize, 3usize, target as usize, target as usize));
-    for y in 0..(target as usize) {
-        for x in 0..(target as usize) {
-            let px = padded.get_pixel(x as u32, y as u32);
-            input_arr[[0, 0, y, x]] = px[0] as f32 / 255.0;
-            input_arr[[0, 1, y, x]] = px[1] as f32 / 255.0;
-            input_arr[[0, 2, y, x]] = px[2] as f32 / 255.0;
-        }
-    }
-    (padded, input_arr, scale, pad_x, pad_y)
+/// Build standard pipeline
+fn build_pipeline(out_dir: PathBuf) -> Vec<Box<dyn Stage>> {
+    vec![
+        Box::new(LoadImageStage),
+        Box::new(PrepareInputStage),
+        Box::new(InferenceStage),
+        Box::new(PostprocessStage {
+            confidence_threshold: 0.5,
+            iou_threshold: 0.4,
+        }),
+        Box::new(SaveCropsStage { out_dir }),
+    ]
 }
 
-fn run_inference(
-    model: &SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>,
-    input_arr: Array4<f32>,
-) -> Result<Array2<f32>, anyhow::Error> {
-    let input_tensor: Tensor = input_arr.into();
-    let outputs = model.run(tvec!(input_tensor.into()))?;
-    let results = canonicalize_detection_output(&outputs[0], Some(5))?;
-    Ok(results)
-}
-
-fn postprocess_detections(
-    results: &Array2<f32>,
-    scale: f32,
-    pad_x: i64,
-    pad_y: i64,
-    target: u32,
-) -> Vec<Bbox> {
-    let (rows, cols) = (results.shape()[0], results.shape()[1]);
-    if cols != 5 {
-        return vec![];
+/// Run pipeline for a single image path
+fn run_pipeline_for_path(stages: &[Box<dyn Stage>], shared: &Shared, path: PathBuf) {
+    let mut ctx = Context::new(path.clone());
+    let start = Instant::now();
+    for stage in stages {
+        let name = stage.name();
+        let t0 = Instant::now();
+        if let Err(e) = stage.run(&mut ctx, shared) {
+            eprintln!("Stage {} failed for {:?}: {}", name, path, e);
+            return; // choose to abort on stage failure; could also continue depending on policy
+        }
+        println!("Stage {} done in {:?}", name, t0.elapsed());
     }
-    let sample_h = results[[0, 0]].abs();
-    let sample_w = results[[0, 0]].abs();
-    let likely_normalized = sample_h <= 1.01 && sample_w <= 1.01;
-    let confidence_threshold = 0.5f32;
-    let mut detections: Vec<Bbox> = Vec::with_capacity(256);
-    for i in 0..rows {
-        let confidence = results[[i, 4]];
-        if confidence < confidence_threshold {
-            continue;
-        }
-        let mut x = results[[i, 0]];
-        let mut y = results[[i, 1]];
-        let mut w = results[[i, 2]];
-        let mut h = results[[i, 3]];
-        if likely_normalized {
-            x *= target as f32;
-            y *= target as f32;
-            w *= target as f32;
-            h *= target as f32;
-        }
-        let x1_model = x - (w / 2.0);
-        let y1_model = y - (h / 2.0);
-        let x2_model = x + (w / 2.0);
-        let y2_model = y + (h / 2.0);
-        let pad_x_f = pad_x as f32;
-        let pad_y_f = pad_y as f32;
-        let inv_scale = 1.0 / scale;
-        let bx1 = (x1_model - pad_x_f) * inv_scale;
-        let by1 = (y1_model - pad_y_f) * inv_scale;
-        let bx2 = (x2_model - pad_x_f) * inv_scale;
-        let by2 = (y2_model - pad_y_f) * inv_scale;
-        detections.push(Bbox::new(bx1, by1, bx2, by2, confidence));
-    }
-    non_max_suppression(detections, 0.4)
-}
-
-fn save_cropped_faces(final_boxes: &[Bbox], raw_img: &DynamicImage, path: &Path) {
-    let mut rgb_owned = raw_img.to_rgb8();
-    for (idx, bbox) in final_boxes.iter().enumerate() {
-        match bbox.crop_bbox(&mut rgb_owned) {
-            Ok(c) => {
-                let out_path = format!(
-                    "output/{}_face_{}.jpg",
-                    path.file_stem().and_then(|s| s.to_str()).unwrap_or("img"),
-                    idx + 1
-                );
-                if let Err(e) = c.save(&out_path) {
-                    eprintln!("Failed to save {}: {}", out_path, e);
-                } else {
-                    println!("Cropped face saved to {}", out_path);
-                }
-            }
-            Err(e) => {
-                eprintln!("Failed to crop bbox {:?}: {}", idx, e);
-            }
-        }
-    }
-}
-
-fn process_image(
-    path: &Path,
-    model: &SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>,
-    t: &Instant,
-) {
-    println!("\nProcessing image: {:?}", path);
-    let raw_img = match image::open(path) {
-        Ok(img) => img,
-        Err(e) => {
-            eprintln!("Failed to open image {:?}: {}", path, e);
-            return;
-        }
-    };
-    let (orig_w, orig_h) = (raw_img.width(), raw_img.height());
-    println!("Image original size: {}x{}", orig_w, orig_h);
-    let target = 640u32;
-    let (padded, input_arr, scale, pad_x, pad_y) = prepare_input(&raw_img, target);
-    println!("Inference started at ... {:?}", t.elapsed());
-    let results = match run_inference(model, input_arr) {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("Inference failed: {}", e);
-            return;
-        }
-    };
-    println!("Inference done in {:?}", t.elapsed());
-    println!("Output tensor shape: {:?}", results.shape());
-    let final_boxes = postprocess_detections(&results, scale, pad_x, pad_y, target);
-    println!("Final boxes after NMS: {}", final_boxes.len());
-    println!("Processing done in {:?}", t.elapsed());
-    save_cropped_faces(&final_boxes, &raw_img, path);
-    println!(
-        "All cropped faces saved in output/ directory. time elapsed: {:?}",
-        t.elapsed()
-    );
+    println!("Pipeline for {:?} finished in {:?}", path, start.elapsed());
 }
 
 fn main() -> Result<(), anyhow::Error> {
     let t = Instant::now();
     let model = load_model()?;
     println!("Model loaded in {:?}", t.elapsed());
-    std::fs::create_dir_all("output")?;
+    let shared = Shared::new(model);
+
+    let out_dir = PathBuf::from("output");
+    std::fs::create_dir_all(&out_dir)?;
+
+    // build pipeline stages once
+    let stages = build_pipeline(out_dir.clone());
+
+    // iterate image files
     let image_dir = std::fs::read_dir("images")?;
-    let mut image_count = 0;
+    let mut image_count = 0usize;
     for entry in image_dir {
-        let t2 = Instant::now();
         let entry = entry?;
         let path = entry.path();
         if !path.is_file() {
@@ -377,10 +513,12 @@ fn main() -> Result<(), anyhow::Error> {
             continue;
         }
         image_count += 1;
-        process_image(&path, &model, &t);
-        println!("Total time for image {:?}: {:?}", path, t2.elapsed());
+        run_pipeline_for_path(&stages, &shared, path);
     }
-    println!("\nProcessed {} images from images/ directory.", image_count);
-    println!("Total time elapsed: {:?}", t.elapsed());
+    println!(
+        "Processed {} images. Total elapsed: {:?}",
+        image_count,
+        t.elapsed()
+    );
     Ok(())
 }
