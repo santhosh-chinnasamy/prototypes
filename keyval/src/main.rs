@@ -1,3 +1,4 @@
+use std::fs::File;
 use std::io::{self, BufRead, BufReader, Seek, Write};
 
 fn main() {
@@ -37,10 +38,14 @@ fn main() {
         match command {
             Some("set") => {
                 let key = parsed.next();
-                let value = parsed.next();
+                let value = parsed.collect::<Vec<&str>>().join(" ");
                 match (key, value) {
-                    (Some(key), Some(value)) => {
-                        handle_set(&mut file, key, value);
+                    (Some(key), value) => {
+                        let result = handle_set(&mut file, key, value.as_str());
+                        match result {
+                            Err(e) => eprintln!("failed to save {key} with {e}"),
+                            Ok(()) => (),
+                        };
                     }
                     _ => eprintln!("Usage: set <key> <value>"),
                 }
@@ -100,9 +105,6 @@ fn handle_get(file: &mut File, key: &str) -> io::Result<Option<String>> {
 
     for line in reader.lines() {
         let line = line?;
-        // if line.starts_with(key) {
-        //     last_match = Some(line);
-        // }
 
         if let Some((k, v)) = line.split_once(' ') {
             if k.trim() == key.trim() {
