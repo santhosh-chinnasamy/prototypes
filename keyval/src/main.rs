@@ -1,5 +1,4 @@
 use std::io::{self, BufRead, BufReader, Seek, Write};
-use std::{fs::File};
 
 fn main() {
     println!("keyval");
@@ -16,7 +15,15 @@ fn main() {
         std::io::stdout().flush().unwrap();
 
         let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
+        let bytes_read = io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read input");
+
+        if bytes_read == 0 {
+            println!("\n Bye");
+            break;
+        }
+
         let input = input.trim();
 
         if input.is_empty() {
