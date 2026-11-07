@@ -1,73 +1,93 @@
-use std::io::{self, BufRead, BufReader, Write};
-use std::{env, fs::File, process};
+use std::io::{self, BufRead, BufReader, Seek, Write};
+use std::{fs::File};
 
 fn main() {
-    let args = parse_args();
-    let program_name = &args[0];
-    match args[1].as_str() {
-        "-h" | "--help" => print_help(program_name),
-        "set" => {
-            let (Some(key), Some(value)) = (&args.get(2), args.get(3)) else {
-                eprintln!("key and value must not be empty");
-                return;
-            };
-            _ = handle_set(key.as_str(), value.as_str());
-        }
-        "get" => {
-            let Some(key) = args.get(2) else {
-                eprintln!("key must be passed");
-                return;
-            };
+    println!("keyval");
+    println!("run help for more info");
+    let mut file = File::options()
+        .read(true)
+        .append(true)
+        .create(true)
+        .open("data.log")
+        .expect("data.log file Error");
 
-            let result = handle_get(key);
-            match result {
-                Ok(Some(val)) => println!("{val}"),
-                Ok(None) => println!("key not found"),
-                Err(e) => eprintln!("error fetchig data for given key. {e}"),
+    loop {
+        print!(">");
+        std::io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+        let input = input.trim();
+
+        if input.is_empty() {
+            continue;
+        }
+
+        let mut parsed = parse_input(input);
+
+        let command = parsed.next();
+
+        match command {
+            Some("set") => {
+                let key = parsed.next();
+                let value = parsed.next();
+                match (key, value) {
+                    (Some(key), Some(value)) => {
+                        handle_set(&mut file, key, value);
+                    }
+                    _ => eprintln!("Usage: set <key> <value>"),
+                }
+            }
+            Some("get") => {
+                let key = parsed.next();
+                match key {
+                    Some(key) => {
+                        let result = handle_get(&mut file, key);
+                        match result {
+                            Ok(Some(value)) => println!("{}", value),
+                            Ok(None) => println!("Key not found"),
+                            Err(err) => eprintln!("Error reading file: {}", err),
+                        }
+                    }
+                    None => eprintln!("Usage: get <key>"),
+                }
+            }
+            Some("quit" | "exit") => {
+                println!("Bye!");
+                break;
+            }
+            _ => {
+                print_help();
             }
         }
-        _ => {
-            print_help(program_name);
-        }
     }
 }
 
-/* fn create_file() {
-    println!("creating data.log file");
-    File::create_new("data.log");
-} */
-
-fn parse_args() -> Vec<String> {
-    let args: Vec<_> = env::args().collect();
-    println!("{:?}", args);
-    let program_name = &args[0];
-
-    if args.len() < 2 {
-        eprintln!("Missing required arguments");
-        print_help(program_name);
-        process::exit(1);
-    }
-
-    args
+fn parse_input(input: &str) -> std::str::SplitWhitespace<'_> {
+    input.split_whitespace()
 }
 
-fn print_help(program_name: &String) {
+fn print_help() {
     println!(
-        "a simple key value store, \n use {} set <key> <value> to store \n use {} get <key> to retrieve data",
-        program_name, program_name
+        "> a simple key value store, \n
+        use set <key> <value> to store \n
+        use get <key> to retrieve data"
     );
 }
 
-fn handle_set(key: &str, value: &str) -> io::Result<()> {
-    let mut file = File::options().append(true).create(true).open("data.log")?;
+fn handle_set(file: &mut File, key: &str, value: &str) -> io::Result<()> {
+    if key.is_empty() || value.is_empty() {
+        eprint!("missing key or value");
+        return Ok(());
+    };
 
     println!("appending key: {}, value: {}", key, value);
-    writeln!(file, "{}, {}", key, value)?;
+    writeln!(file, "{} {}", key, value)?;
     Ok(())
 }
 
-fn handle_get(key: &str) -> io::Result<Option<String>> {
-    let file = File::open("data.log")?;
+fn handle_get(file: &mut File, key: &str) -> io::Result<Option<String>> {
+    file.seek(io::SeekFrom::Start(0))?;
     let reader = BufReader::new(file);
     let mut last_match = None;
 
