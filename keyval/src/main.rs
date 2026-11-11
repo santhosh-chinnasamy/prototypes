@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Seek, Write};
+use std::time::Instant;
 
 fn main() {
     println!("keyval");
@@ -99,6 +100,7 @@ fn handle_set(file: &mut File, key: &str, value: &str) -> io::Result<()> {
 }
 
 fn handle_get(file: &mut File, key: &str) -> io::Result<Option<String>> {
+    let start_time = Instant::now();
     file.seek(io::SeekFrom::Start(0))?;
     let reader = BufReader::new(file);
     let mut last_match = None;
@@ -112,5 +114,7 @@ fn handle_get(file: &mut File, key: &str) -> io::Result<Option<String>> {
             }
         }
     }
+    let current = Instant::now();
+    println!("handle_get took: {:?}", current.duration_since(start_time));
     Ok(last_match)
 }
